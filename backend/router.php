@@ -15,5 +15,18 @@ if (preg_match('#^/api(?|$|/(.*)$)#', $uri, $m)) {
     return true;
 }
 
-// Si no es /api, devolver 404 o servir archivos estáticos
+// Raíz del túnel (Pinggy/ngrok): sin /api el built-in devolvía 404
+if ($uri === '/' || $uri === '') {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'service' => 'cloudsesor2',
+        'hint'    => 'La API está bajo /api/…',
+        'try'     => [
+            'GET /api/sensors',
+            'GET /api/alerts?limit=20',
+        ],
+    ], JSON_UNESCAPED_SLASHES);
+    return true;
+}
+
 return false;
