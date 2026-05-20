@@ -3,7 +3,7 @@
  * Controlador de recepción de datos (POST /api/data).
  *
  * Flujo modular para tesis:
- * 1. Validar entrada (sensor_id válido, values numéricos)
+ * 1. Validar entrada (key o sensor_id válido, values numéricos)
  * 2. Guardar mediciones de variables medidas
  * 3. Calcular variables derivadas con fórmulas y guardarlas en measurements
  * 4. Evaluar reglas de alerta y registrar alertas si corresponde
@@ -100,7 +100,7 @@ class DataController
 
     /**
      * POST /api/data
-     * Body: { "sensor_id": int, "values": { "nombre_var": number, ... }, "measured_at": "opcional" }
+     * Body: { "key": "api_key", "values": { ... } } o { "sensor_id": int, "values": { ... }, "measured_at": "opcional" }
      */
     public function store(): void
     {
@@ -111,7 +111,7 @@ class DataController
         }
 
         // --- Validaciones ---
-        $validation = $this->validateInput($input);
+        $validation = $this->validateInput($input); // resuelve sensor_id desde key si aplica
         if ($validation !== null) {
             JsonResponse::error($validation['message'], $validation['status'], $validation['extra'] ?? []);
             return;
@@ -147,32 +147,49 @@ class DataController
     /**
      * Valida el cuerpo de la petición. Devuelve null si es válido o un array con message, status y opcional extra.
      */
-    private function validateInput(array $input): ?array
+    private function validateInput(array &$input): ?array
     {
-        if (!isset($input['sensor_id'])) {
+        $hasKey = isset($input['key']) && trim((string) $input['key']) !== '';
+        $hasSensorId = isset($input['sensor_id']);
+
+        if (!$hasKey && !$hasSensorId) {
             return [
-                'message' => 'Falta el campo obligatorio: sensor_id',
+                'message' => 'Falta el campo obligatorio: key (llave del sensor) o sensor_id',
                 'status' => 400,
-                'extra' => ['field' => 'sensor_id'],
+                'extra' => ['fields' => ['key', 'sensor_id']],
             ];
         }
 
-        $sensorId = filter_var($input['sensor_id'], FILTER_VALIDATE_INT);
-        if ($sensorId === false || $sensorId < 1) {
-            return [
-                'message' => 'sensor_id debe ser un entero positivo',
-                'status' => 400,
-                'extra' => ['field' => 'sensor_id', 'received' => $input['sensor_id']],
-            ];
-        }
+        if ($hasKey) {
+            $key = trim((string) $input['key']);
+            $sensor = $this->sensorModel->getByApiKey($key);
+            if (!$sensor) {
+                return [
+                    'message' => 'Sensor no encontrado con esa llave',
+                    'status' => 404,
+                    'extra' => ['key' => $key],
+                ];
+            }
+            $input['sensor_id'] = (int) $sensor['id'];
+        } else {
+            $sensorId = filter_var($input['sensor_id'], FILTER_VALIDATE_INT);
+            if ($sensorId === false || $sensorId < 1) {
+                return [
+                    'message' => 'sensor_id debe ser un entero positivo',
+                    'status' => 400,
+                    'extra' => ['field' => 'sensor_id', 'received' => $input['sensor_id']],
+                ];
+            }
 
-        $sensor = $this->sensorModel->getById($sensorId);
-        if (!$sensor) {
-            return [
-                'message' => 'Sensor no encontrado',
-                'status' => 404,
-                'extra' => ['sensor_id' => $sensorId],
-            ];
+            $sensor = $this->sensorModel->getById($sensorId);
+            if (!$sensor) {
+                return [
+                    'message' => 'Sensor no encontrado',
+                    'status' => 404,
+                    'extra' => ['sensor_id' => $sensorId],
+                ];
+            }
+            $input['sensor_id'] = (int) $sensorId;
         }
 
         if (!isset($input['values']) || !is_array($input['values'])) {

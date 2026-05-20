@@ -1,18 +1,19 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 
-// Backend en esta máquina de desarrollo (misma WiFi que el NodeMCU).
-// IP LAN actual de este PC: 192.168.101.6 — si el router te asigna otra, ejecuta: hostname -I
-//
-// ——————— Wi‑Fi (misma subred que 192.168.101.x) ———————
-const char* ssid     = "TU_WIFI_SSID";
-const char* password = "TU_WIFI_PASSWORD";
+// ——————— Wi‑Fi ———————
+const char* ssid     = "Familia Perez Ortega";
+const char* password = "Samuelemma2925";
 
-// ——————— API PHP en este equipo (puerto 8000, ver README) ———————
-// Sin barra final. Arranque:  cd backend && php -S 0.0.0.0:8000 router.php
-// Desde fuera de la LAN usa tu IP pública y NAT:  http://TU_IP_PUBLICA:8000
-const char* SERVER_BASE = "http://192.168.101.6:8000";
+// ——————— Backend vía Pinggy (no uses IP LAN ni IP pública en el NodeMCU) ———————
+// En tu PC (carpeta backend):
+//   php -S 0.0.0.0:8000 router.php
+//   pinggy http 8000
+// Copia el host HTTPS NUEVO cada vez que abres Pinggy (plan free: al cerrar el túnel
+// la URL deja de existir → el navegador dice "comprueba la escritura" / NXDOMAIN).
+// Sin barra final. El sketch añade /api/data/ingest?key=...
+const char* SERVER_BASE = "https://jtzuc-181-119-202-130.run.pinggy-free.link";
 
 // Llave del sensor (api_key en la BD); cambia si creaste otra
 const char* SENSOR_API_KEY = "abc123";
@@ -50,10 +51,9 @@ const int ADC_MAX = 1023;
 const int NUM_SAMPLES = 30;
 const int SAMPLE_DELAY_MS = 10;
 
-WiFiClient wifiClient;
-
 static String normalizarBaseUrl(const char* base) {
   String b = String(base);
+  b.trim();  // quita espacios al copiar/pegar la URL de Pinggy
   while (b.length() > 0 && b.charAt(b.length() - 1) == '/')
     b.remove(b.length() - 1);
   return b;
@@ -71,8 +71,7 @@ float readAvgRaw() {
 }
 
 /**
- * GET http://IP:puerto/api/data/ingest?key=...&nivel=...&temperatura=...
- * (Misma API que en docs/API_INGEST_GET.md)
+ * GET https://TU_TUNEL.run.pinggy-free.link/api/data/ingest?key=...&nivel=...&temperatura=...
  */
 bool enviarAlBackend(float nivel_cm, bool nivel_ok, float temp_c) {
   if (WiFi.status() != WL_CONNECTED) {
@@ -93,21 +92,31 @@ bool enviarAlBackend(float nivel_cm, bool nivel_ok, float temp_c) {
   url += "=";
   url += String(temp_c, 3);
 
+  WiFiClientSecure client;
+  client.setInsecure();  // solo pruebas; Pinggy usa HTTPS
+
   HTTPClient http;
   http.setTimeout(30000);
   http.setUserAgent("CloudSensor-ESP8266/1");
   http.addHeader("Connection", "close");
-  http.begin(wifiClient, url);
+  http.begin(client, url);
 
   int code = http.GET();
   if (code > 0) {
+    String body = http.getString();
     Serial.printf("HTTP %d: ", code);
-    Serial.println(http.getString());
+    Serial.println(body);
+    if (body.indexOf("\"hint\"") >= 0) {
+      Serial.println("ERROR: falta /api/data/ingest en la URL (revisa SERVER_BASE).");
+    } else if (body.indexOf("saved_measured") >= 0) {
+      Serial.println("OK: datos guardados.");
+    }
   } else {
     Serial.printf("Error HTTP: %s | heap: %u\n",
                   http.errorToString(code).c_str(),
                   (unsigned)ESP.getFreeHeap());
-    Serial.printf("URL base usada: %s (en PC: ss -tlnp | grep 8000 → debe ser 0.0.0.0:8000)\n", base.c_str());
+    Serial.printf("URL: %s\n", url.c_str());
+    Serial.println("¿Pinggy activo y php -S 0.0.0.0:8000 en el PC?");
   }
   http.end();
   return code == 201 || code == 200;
@@ -116,7 +125,7 @@ bool enviarAlBackend(float nivel_cm, bool nivel_ok, float temp_c) {
 void setup() {
   Serial.begin(115200);
   delay(100);
-  Serial.println("\n\n=== INICIO NODEMCU (CloudSensor, IP pública HTTP) ===");
+  Serial.println("\n\n=== CloudSensor NodeMCU (Pinggy) ===");
 
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
@@ -129,7 +138,7 @@ void setup() {
     Serial.print('.');
   }
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\nWiFi OK. IP local del NodeMCU: %s\n", WiFi.localIP().toString().c_str());
+    Serial.println("\nWiFi OK.");
   } else {
     Serial.println("\nWiFi: no conectado.");
   }
@@ -148,7 +157,7 @@ void setup() {
 
   Serial.printf("VREF LM35: %.3f V\n", VREF);
   Serial.printf("Ingest: %s/api/data/ingest\n", normalizarBaseUrl(SERVER_BASE).c_str());
-  Serial.println("PC: usa  php -S 0.0.0.0:8000 router.php  (si usas 127.0.0.1 el ESP no conecta).");
+  Serial.println("PC: pinggy http 8000  +  cd backend && php -S 0.0.0.0:8000 router.php");
   Serial.println("Setup completado.\n");
 }
 

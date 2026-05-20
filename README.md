@@ -62,7 +62,7 @@ php -S localhost:8000 router.php
 
 La API quedará en `http://localhost:8000/api/`.
 
-**Exponer por IP pública (NAT):** usa `php -S 0.0.0.0:8000 router.php` y configura el reenvío de puerto del router hacia ese PC. El sketch está en `backend/utils/arduino.ino` con `SERVER_BASE = "http://TU_IP_PUBLICA:8000"`. En el frontend, `VITE_API_URL=http://TU_IP_PUBLICA:8000/api` en `.env`. Detalle en `docs/API_INGEST_GET.md`.
+**Exponer con Pinggy (recomendado para NodeMCU):** en el PC, `php -S 0.0.0.0:8000 router.php` y en otra terminal `pinggy http 8000`. Copia la URL HTTPS en `backend/utils/arduino.ino` (`SERVER_BASE`). No hace falta IP pública ni NAT en el router. Detalle en `docs/API_INGEST_GET.md`.
 
 ### 3. Frontend React
 
@@ -83,7 +83,7 @@ El frontend se abre en `http://localhost:5173`.
 
 1. Instalar el soporte ESP8266 en Arduino IDE (Gestor de tarjetas).
 2. Abrir **`backend/utils/arduino.ino`** (ingest por **GET** con `api_key`).
-3. Configurar `ssid`, `password`, **`SERVER_BASE`** (`http://TU_IP_PUBLICA:puerto` o `http://IP_LAN:8000`), **`SENSOR_API_KEY`** y nombres de variables si difieren de `nivel` / `temperatura`.
+3. Configurar `ssid`, `password`, **`SERVER_BASE`** (URL HTTPS de Pinggy, sin `/api`), **`SENSOR_API_KEY`** y nombres de variables si difieren de `nivel` / `temperatura`.
 4. Subir el sketch al NodeMCU.
 
 Ejemplo alternativo con **POST** y JSON: `docs/nodemcu_example.ino` (requiere **ArduinoJson** v6).
@@ -96,17 +96,19 @@ En el backend, los nombres de las variables (ej: `nivel`, `temperatura`) deben c
 2. **Variables:** Entrar al sensor → Variables → Añadir variable (nombre igual al que envía el NodeMCU, tipo "Medida"). Para fórmulas, crear también variables tipo "Calculada".
 3. **Fórmulas:** En Fórmulas del sensor, expresión como `nivel*a1 + temperatura*a2 + b` y parámetros JSON `{"a1": 1, "a2": 0.5, "b": 0}`. La variable resultado debe ser de tipo Calculada.
 4. **Reglas de alerta:** En Alertas del sensor, definir condición (variable, operador, umbral).
-5. **Enviar datos:** Desde NodeMCU (o con `curl`/Postman) POST a `http://TU_SERVIDOR:8000/api/data` con body:
+5. **Enviar datos:** Desde NodeMCU (o con `curl`/Postman) POST a `http://TU_SERVIDOR:8000/api/data` con body (recomendado: `key` = `api_key` del sensor):
 
 ```json
 {
-  "sensor_id": 1,
+  "key": "abc123",
   "values": {
     "nivel": 10,
     "temperatura": 30
   }
 }
 ```
+
+También se acepta `"sensor_id": 1` en lugar de `key`. La URL debe incluir `/api/data` (no solo la raíz del túnel).
 
 6. **Ver alertas:** Menú Alertas. La lista se actualiza cada 5 segundos.
 
@@ -134,7 +136,7 @@ En el backend, los nombres de las variables (ej: `nivel`, `temperatura`) deben c
 | DELETE | /api/alert-rules/:id | Eliminar regla |
 | GET | /api/alerts | Listar alertas (?sensor_id= &unread_only=1) |
 | POST | /api/alerts/:id/read | Marcar alerta como leída |
-| POST | /api/data | Recibir datos (sensor_id, values) |
+| POST | /api/data | Recibir datos (key o sensor_id, values) |
 
 ## Ejemplo con curl
 
@@ -147,7 +149,7 @@ curl -X POST http://localhost:8000/api/sensors \
 # Enviar datos (como el NodeMCU)
 curl -X POST http://localhost:8000/api/data \
   -H "Content-Type: application/json" \
-  -d '{"sensor_id":1,"values":{"nivel":10,"temperatura":30}}'
+  -d '{"key":"abc123","values":{"nivel":10,"temperatura":30}}'
 ```
 
 ## Estructura del proyecto

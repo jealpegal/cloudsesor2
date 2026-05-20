@@ -15,22 +15,36 @@ GET /api/data/ingest
 http://localhost:8000/api/data/ingest
 ```
 
-### IP pública (ESP8266 / red exterior)
+### Pinggy (recomendado: NodeMCU sin IP ni NAT)
 
-Con **HTTP** (recomendado en NodeMCU) la URL es la misma ruta cambiando host y puerto por los que expongas en el router o en un VPS:
+El NodeMCU solo necesita WiFi e internet. En tu PC el PHP escucha en local y Pinggy crea una URL pública:
 
 ```
-http://TU_IP_PUBLICA:8000/api/data/ingest?key=TU_API_KEY&nivel=1.5&temperatura=25.2
+https://TU_SUBDOMINIO.run.pinggy-free.link/api/data/ingest?key=TU_API_KEY&nivel=1.5&temperatura=25.2
 ```
 
-1. En el equipo donde corre PHP: **`php -S 0.0.0.0:8000 router.php`** (desde la carpeta `backend`), no solo `localhost`, para aceptar conexiones desde fuera de la máquina.
-2. En el router: **reenvío de puerto** (NAT) del puerto elegido (ej. 8000) hacia la **IP local** de ese PC.
-3. Firewall del SO: permitir TCP en ese puerto.
-4. El sketch Arduino usa `SERVER_BASE = "http://TU_IP_PUBLICA:8000"` (sin `/api`; el código añade `/api/data/ingest`).
-5. **Frontend:** en `frontend/.env` define `VITE_API_URL=http://TU_IP_PUBLICA:8000/api` para que el dashboard llame a la misma API expuesta.
-6. **CORS:** el backend admite orígenes `http(s)://IPv4:puerto` (p. ej. `http://TU_IP_PUBLICA:5173`). Orígenes concretos extra: variable de entorno `CORS_ALLOWED_ORIGINS` (lista separada por comas).
+1. **`cd backend && php -S 0.0.0.0:8000 router.php`**
+2. En otra terminal: **`pinggy http 8000`** (o el cliente Pinggy que uses).
+3. Copia el host **HTTPS** en el sketch: `SERVER_BASE = "https://TU_SUBDOMINIO.run.pinggy-free.link"` (sin `/api`; el código añade `/api/data/ingest`).
+4. El ESP8266 usa `WiFiClientSecure` + `setInsecure()` en el sketch (solo pruebas; no valida certificado).
 
-**HTTPS** con dominio y certificado en la IP pública puede funcionar desde el navegador; en **ESP8266** el TLS moderno suele dar problemas: para la placa mantén **HTTP** hacia la IP pública o un puerto dedicado sin TLS.
+**Frontend:** puedes usar la misma URL de Pinggy en `frontend/.env`: `VITE_API_URL=https://TU_SUBDOMINIO.run.pinggy-free.link/api`.
+
+### Si el navegador no abre la URL (túnel caído)
+
+En Pinggy **gratis**, al cerrar la terminal o apagar el PC la URL **deja de existir** (DNS `NXDOMAIN`). No es un typo en `bnedx-...`: hay que **volver a ejecutar** `pinggy http 8000`, copiar el **host nuevo** y actualizar el sketch / pruebas en el navegador.
+
+Comprueba en el PC (con PHP y Pinggy activos):
+
+```bash
+curl -sS "https://TU_HOST_NUEVO.run.pinggy-free.link/api/data/ingest?key=abc123&temperatura=1"
+```
+
+Debe responder `201` y JSON con `saved_measured`. Si `curl` falla con "Could not resolve host", el túnel no está activo o la URL es vieja.
+
+### Alternativa: IP pública + NAT
+
+Si no usas Pinggy, puedes exponer el puerto 8000 con reenvío en el router y `SERVER_BASE = "http://TU_IP_PUBLICA:8000"` (HTTP, sin TLS en la placa). Ver comentarios históricos en el repositorio; para tesis suele ser más simple Pinggy.
 
 ---
 

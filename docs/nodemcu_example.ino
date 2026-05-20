@@ -1,14 +1,17 @@
 /**
  * Ejemplo de envío de datos desde NodeMCU (ESP8266) al backend PHP.
- * Requiere: ESP8266 core para Arduino IDE y WiFi.
+ * Requiere: ESP8266 core para Arduino IDE, WiFi y ArduinoJson v6.
  *
  * Túnel Pinggy (u otro): la URL pública suele ser HTTPS.
  * Este sketch usa WiFiClientSecure + setInsecure() solo para pruebas (no valida
  * el certificado). En producción conviene validar certificado o usar red local.
  *
+ * IMPORTANTE: la URL debe terminar en /api/data (no solo el host del túnel).
+ *
  * Configuración:
  * - SSID y PASSWORD de tu WiFi
- * - SERVER_URL: URL completa del POST (te la pegamos cuando tengas la de Pinggy)
+ * - SERVER_URL: URL completa del POST (host Pinggy + /api/data)
+ * - SENSOR_API_KEY: misma llave (api_key) que el sensor en la BD / frontend
  *
  * El JSON debe coincidir con los nombres de variables del sensor en la BD.
  */
@@ -22,10 +25,11 @@
 const char* WIFI_SSID     = "TU_WIFI_SSID";
 const char* WIFI_PASSWORD = "TU_WIFI_PASSWORD";
 
-// Túnel Pinggy → backend (si Pinggy te cambia el host, actualiza solo esta línea)
-const char* SERVER_URL    = "https://ntats-181-119-202-130.run.pinggy-free.link/api/data";
+// Host Pinggy sin barra final + ruta de la API (obligatorio /api/data)
+const char* SERVER_URL    = "https://TU_SUBDOMINIO.run.pinggy-free.link/api/data";
 
-const int   SENSOR_ID     = 1;  // ID del sensor en la BD (creado desde el frontend)
+// Llave del sensor (columna api_key en la BD; la defines al crear/editar el sensor)
+const char* SENSOR_API_KEY = "abc123";
 
 // Intervalo entre envíos (ms)
 const unsigned long INTERVAL_MS = 15000;
@@ -65,16 +69,16 @@ void loop() {
 
 /**
  * POST /api/data
- * Body: { "sensor_id": 1, "values": { "nivel": ..., "temperatura": ... } }
- * Los nombres en "values" deben coincidir con las variables del sensor en la BD.
- * Aquí: valores de prueba; sustituí por analogRead(A0), DHT, etc.
+ * Body: { "key": "abc123", "values": { "nivel": ..., "temperatura": ... } }
+ * Respuesta correcta (201): incluye "saved_measured": ["nivel", "temperatura", ...]
+ * Si ves "hint": "La API está bajo /api/…" → la URL no lleva /api/data
  */
 void sendSensorData() {
   float nivel       = 10.0f + (float)(millis() % 50) / 10.0f;
   float temperatura = 25.0f + (float)(millis() % 200) / 10.0f;
 
   StaticJsonDocument<256> doc;
-  doc["sensor_id"] = SENSOR_ID;
+  doc["key"] = SENSOR_API_KEY;
 
   JsonObject values = doc.createNestedObject("values");
   values["nivel"]       = nivel;
@@ -101,6 +105,11 @@ void sendSensorData() {
     Serial.print(httpCode);
     Serial.print(": ");
     Serial.println(response);
+    if (response.indexOf("saved_measured") >= 0) {
+      Serial.println("OK: datos guardados.");
+    } else if (response.indexOf("\"hint\"") >= 0) {
+      Serial.println("ERROR: falta /api/data en SERVER_URL.");
+    }
   } else {
     Serial.print("Error: ");
     Serial.println(http.errorToString(httpCode));
