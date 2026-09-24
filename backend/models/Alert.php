@@ -19,7 +19,7 @@ class AlertModel
             "INSERT INTO alerts (alert_rule_id, sensor_id, variable_id, value, threshold_value, operator, message) VALUES (?, ?, ?, ?, ?, ?, ?)"
         );
         $stmt->execute([$alertRuleId, $sensorId, $variableId, $value, $thresholdValue, $operator, $message ?? '']);
-        return (int) $this->pdo->lastInsertId();
+        return db_last_insert_id($this->pdo, 'alerts');
     }
 
     /** Listar alertas (últimas primero, opcionalmente no leídas) */
@@ -44,7 +44,10 @@ class AlertModel
                 ORDER BY a.triggered_at DESC
                 LIMIT ?";
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
+        foreach ($params as $i => $value) {
+            $stmt->bindValue($i + 1, $value, PDO::PARAM_INT);
+        }
+        $stmt->execute();
         return $stmt->fetchAll();
     }
 

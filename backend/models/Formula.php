@@ -25,7 +25,7 @@ class FormulaModel
         $stmt->execute([$sensorId]);
         $rows = $stmt->fetchAll();
         foreach ($rows as &$r) {
-            $r['parameters'] = json_decode($r['parameters'], true) ?: [];
+            $r['parameters'] = db_json_array($r['parameters']);
         }
         return $rows;
     }
@@ -40,7 +40,7 @@ class FormulaModel
         $stmt->execute([$sensorId]);
         $rows = $stmt->fetchAll();
         foreach ($rows as &$r) {
-            $r['parameters'] = json_decode($r['parameters'], true) ?: [];
+            $r['parameters'] = db_json_array($r['parameters']);
         }
         return $rows;
     }
@@ -54,7 +54,7 @@ class FormulaModel
         $stmt->execute([$id]);
         $row = $stmt->fetch();
         if (!$row) return null;
-        $row['parameters'] = json_decode($row['parameters'], true) ?: [];
+        $row['parameters'] = db_json_array($row['parameters']);
         return $row;
     }
 
@@ -71,7 +71,7 @@ class FormulaModel
             $resultVariableId,
             json_encode($parameters)
         ]);
-        return (int) $this->pdo->lastInsertId();
+        return db_last_insert_id($this->pdo, 'formulas');
     }
 
     /** Actualizar fórmula (incluyendo parámetros) */

@@ -1,2 +1,4 @@
-# Credenciales locales (no subir)
+# Credenciales (no subir)
+.env
+.env.local
 config/db.local.php

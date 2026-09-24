@@ -20,7 +20,7 @@ class MeasurementModel
             "INSERT INTO measurements (sensor_id, variable_id, value, measured_at) VALUES (?, ?, ?, ?)"
         );
         $stmt->execute([$sensorId, $variableId, $value, $measuredAt]);
-        return (int) $this->pdo->lastInsertId();
+        return db_last_insert_id($this->pdo, 'measurements');
     }
 
     /** Últimas mediciones de un sensor (para dashboard o histórico) */
@@ -34,7 +34,9 @@ class MeasurementModel
              ORDER BY m.measured_at DESC
              LIMIT ?"
         );
-        $stmt->execute([$sensorId, $limit]);
+        $stmt->bindValue(1, $sensorId, PDO::PARAM_INT);
+        $stmt->bindValue(2, $limit, PDO::PARAM_INT);
+        $stmt->execute();
         return $stmt->fetchAll();
     }
 
@@ -57,7 +59,10 @@ class MeasurementModel
         $params[] = $limit;
 
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
+        foreach ($params as $i => $value) {
+            $stmt->bindValue($i + 1, $value, PDO::PARAM_INT);
+        }
+        $stmt->execute();
         return $stmt->fetchAll();
     }
 }

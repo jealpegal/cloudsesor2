@@ -59,7 +59,7 @@ class AlertRuleModel
             "INSERT INTO alert_rules (sensor_id, variable_id, operator, threshold_value, description) VALUES (?, ?, ?, ?, ?)"
         );
         $stmt->execute([$sensorId, $variableId, $operator, $thresholdValue, $description ?? '']);
-        return (int) $this->pdo->lastInsertId();
+        return db_last_insert_id($this->pdo, 'alert_rules');
     }
 
     /** Actualizar regla */

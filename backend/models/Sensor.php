@@ -54,7 +54,7 @@ class SensorModel
     {
         $stmt = $this->pdo->prepare("INSERT INTO sensors (name, description, api_key) VALUES (?, ?, ?)");
         $stmt->execute([$name, $description ?? '', $apiKey ?? null]);
-        return (int) $this->pdo->lastInsertId();
+        return db_last_insert_id($this->pdo, 'sensors');
     }
 
     /** Actualizar sensor */

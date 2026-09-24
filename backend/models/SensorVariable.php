@@ -51,7 +51,7 @@ class SensorVariableModel
             "INSERT INTO sensor_variables (sensor_id, name, type, unit) VALUES (?, ?, ?, ?)"
         );
         $stmt->execute([$sensorId, $name, $type, $unit ?? '']);
-        return (int) $this->pdo->lastInsertId();
+        return db_last_insert_id($this->pdo, 'sensor_variables');
     }
 
     /** Actualizar variable */
